@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+    <head>
+
+         <!--Required meta tags-->
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
+
+         <!--documentation at http://getbootstrap.com/docs/4.1/, alternative themes at https://bootswatch.com/-->
+        <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" rel="stylesheet">
+
+         <!--https://favicon.io/emoji-favicons/two-women-holding-hands/-->
+        <link href="/static/favicon.ico" rel="icon">
+
+        <link href="/static/styles.css" rel="stylesheet">
+
+        <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js"></script>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js"></script>
+
+        <title>crowd: {% block title %}{% endblock %}</title>
+
+        <style>
+            #map
+            {
+                height: 100%;
+                margin: 0%;
+            }
+            html, body
+            {
+                height: 75%;
+                margin: 2%;
+                /*padding: 0;*/
+            }
+            #floating-panel
+            {
+                position: relative;
+                top: 115%;
+                /*left: 7%;*/
+                z-index: 5;
+                background-color: #fff7e6;
+                padding: 0px;
+                border: 0px solid #999;
+                text-align: center;
+                font-family: 'Roboto','sans-serif';
+                line-height: 30px;
+                padding-left: 1px;
+            }
+            #floating-panel-markers
+            {
+                position: relative;
+                top: 115%;
+                z-index: 5;
+                background-color: #fff7e6;
+                padding: 0px;
+                border: 0px solid #999;
+                text-align: center;
+                font-family: 'Roboto','sans-serif';
+                line-height: 30px;
+                padding-left: 1px;
+            }
+        </style>
+
+    </head>
+
+    <body>
+
+        <nav class="navbar navbar-expand-md">
+            <a class="navbar-brand" href="/"><span class="title">crowd.</span></a>
+            <button aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation" class="navbar-toggler" data-target="#navbar" data-toggle="collapse" type="button">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbar">
+                {% if session.user_id %}
+                    <ul class="navbar-nav mr-auto mt-2">
+                        <li class="nav-item"><a class="nav-link" href="/stats">my stats</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/annotate">annotate</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/latenight">latenight</a></li>
+                    </ul>
+                    <ul class="navbar-nav ml-auto mt-2">
+                        <li class="nav-item"><a class="nav-link" href="/logout">log out</a></li>
+                    </ul>
+                {% else %}
+                    <ul class="navbar-nav ml-auto mt-2">
+                        <li class="nav-item"><a class="nav-link" href="/register">register</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/login">log in</a></li>
+                    </ul>
+                {% endif %}
+            </div>
+        </nav>
+
+        <div id="floating-panel">
+            <button class="button3" onclick="toggleHeatmap_crosswalks()">toggle crosswalk heatmap</button>
+            <!--<button onclick="changeOpacity()">Change opacity</button>-->
+        </div>
+
+        <div id="floating-panel-markers">
+          <button onclick="hideMarkers();">hide markers</button>
+          <button onclick="showMarkers();">show markers</button>
+          <button onclick="deleteAllMarkers();">delete markers</button>
+        </div>
+
+        <h3>help us annotate the map. click to add crosswalks, then submit when ready.</h3>
+
+        <button class="buttonsubmit" id="theButton">submit.</button>
+
+        <div id="map"></div>
+
+        <script>
+
+            var map, heatmap;
+            var newlat = Array();
+            var newlng = Array();
+
+            // look up tables for heatmap gradients
+            var magentatopurple = [
+                'rgba(255, 55, 255, 0)',
+                'rgba(255, 55, 235, 0.5)',
+                'rgba(255, 55, 215, 0.75)',
+                'rgba(255, 55, 195, 0.75)',
+                'rgba(255, 55, 180, 0.75)',
+                'rgba(255, 55, 180, 1)',
+                'rgba(255, 55, 170, 1)',
+                'rgba(255, 55, 150, 1)',
+                'rgba(255, 55, 130, 1)'
+            ];
+
+            var cyan = [
+                'rgba(0, 255, 255, 0)',
+                'rgba(0, 255, 255, 1)'
+            ];
+
+            // initialize map and heatmaps
+            function initMap() {
+                map = new google.maps.Map(document.getElementById('map'), {
+                    zoom: 13,
+                center: {lat: 42.364843, lng: -71.102661},
+                mapTypeId: 'satellite'
+                });
+
+                heatmap_crosswalks = new google.maps.visualization.HeatmapLayer({
+                    data: getPoints_crosswalks(),
+                    gradient: magentatopurple,
+                    radius: 7,
+                    map: map
+                });
+
+                // create map marker when clicked
+                map.addListener('click',function(event) {
+                    addMarker(event.latLng, 'Click Generated Marker', map);
+                    newlat.push(event.latLng.lat());
+                    newlng.push(event.latLng.lng());
+                });
+
+            }
+
+            var lat_crosswalks = {{ lat_crosswalks }};
+            var lng_crosswalks = {{ lng_crosswalks }};
+
+            // get points for crosswalk heatmap
+            function getPoints_crosswalks() {
+                var limit = lat_crosswalks.length;
+                var points = new Array()
+                for (var i = 0; i < limit; i++)
+                {
+                    var latpnt = lat_crosswalks[i];
+                    var lngpnt = lng_crosswalks[i];
+                    points[i] = new google.maps.LatLng(latpnt,lngpnt)
+                 }
+                 return points
+            }
+
+            // get points added by user annotation for second (temporary) heatmap
+            function getPoints_new() {
+                var limit = crosswalks.length;
+                var points = new Array()
+                for (var i = 0; i < limit; i++)
+                {
+                    var latpnt = crosswalks[i]["lat"];
+                    var lngpnt = crosswalks[i]["lng"];
+                    points[i] = new google.maps.LatLng(latpnt,lngpnt)
+                 }
+                 return points
+            }
+
+            function toggleHeatmap_crosswalks() {
+                heatmap_crosswalks.setMap(heatmap_crosswalks.getMap() ? null : map);
+            }
+
+            var id;
+            var markers = {};
+            var markersarray = [];
+
+            // add marker
+            function addMarker(latlng,title,map) {
+                marker = new google.maps.Marker({
+                        position: latlng,
+                        map: map,
+                        title: title,
+                        draggable:false
+                });
+
+                id = marker.__gm_id;
+                markers[id] = marker;
+                markersarray.push(marker);
+
+                // if new marker is right clicked, it can be removed (but only most recent)
+                google.maps.event.addListener(marker, "rightclick", function (event) {
+                    id = this.__gm_id;
+                    dedlat = event.latLng.lat();
+                    dedlng = event.latLng.lng();
+                    deleteMarker(id)
+                });
+            }
+
+            // delete single marker
+            function deleteMarker(id) {
+                marker = markers[id];
+                marker.setMap(null);
+                for (var i = 0; i < newlat.length; i++) {
+                    if (newlat[i] == dedlat && newlng[i] == dedlng) {
+                        newlat[i] = null;
+                        newlng[i] = null;
+                        markersarray[i] = null;
+                    }
+                }
+            }
+
+            // hide all markers
+            function hideMarkers() {
+                for (var i = 0; i < markersarray.length; i++) {
+                    if (markersarray[i] != null) {
+                        markersarray[i].setVisible(false);
+                    }
+                }
+            }
+
+            // show all markers
+            function showMarkers() {
+                for (var i = 0; i < markersarray.length; i++) {
+                    if (markersarray[i] != null) {
+                        markersarray[i].setVisible(true);
+                    }
+                }
+            }
+
+            // delete all markers
+            function deleteAllMarkers() {
+                for (var i = 0; i < newlat.length; i++) {
+                    newlat[i] = null;
+                    newlng[i] = null;
+                    if (markersarray[i] != null) {
+                        markersarray[i].setVisible(false);
+                        markersarray[i] = null;
+                    }
+                }
+                crosswalks = [];
+            }
+
+            // setup some JSON to use
+            var crosswalks = [];
+
+            // setup button to initiate submission
+            window.onload = function() {
+            	// setup the button click
+            	document.getElementById("theButton").onclick = function() {
+            		doWork()
+            	};
+            }
+
+            // add all markers added to crosswalks
+            function doWork() {
+                for (var i = 0; i < newlat.length; i++) {
+                    if (newlat[i] != null) {
+                        crosswalks.push({ "lat":newlat[i],"lng":newlng[i] })
+                    }
+                }
+
+            // crosswalks to JSON and ajax the JSON to the server
+        	$.ajax({
+                type: 'POST',
+                url: '/annotate',
+                data: JSON.stringify (crosswalks),
+                complete: function(data) {
+                    alert("Thanks for contributing! Head over to my stats to see all your hard work.");
+                    heatmap_new = new google.maps.visualization.HeatmapLayer({
+                        data: getPoints_new(),
+                        gradient: cyan,
+                        radius: 7,
+                        map: map
+                    });
+                    deleteAllMarkers();
+                },
+                contentType: "application/json",
+                dataType: 'json'
+            });
+        	// stop link reloading the page
+            // event.preventDefault();
+            }
+        </script>
+
+        <script type='text/javascript' src='config.js'>
+        
+            var maps_key = config.MAPS_KEY;
+            var firebase_key = config.FIREBASE_KEY;
+
+        </script>
+
+        <script async defer src= "https://maps.googleapis.com/maps/api/js?key=" + maps_key>
+        </script>
+
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+
+    </body>
+
+</html>
+
+
+
+
+

@@ -1,0 +1,128 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    my stats
+{% endblock %}
+
+{% block main %}
+
+    <style>
+        #map
+        {
+            height: 75%;
+            margin: 0%;
+        }
+        #myDiv
+        {
+            align-content: center;
+        }
+        html, body, main
+        {
+            height: 100%;
+            margin: 2%;
+        }
+
+    </style>
+
+    <h3>check out what you've contributed to the crosswalk map:</h3>
+
+    <div id="map"></div>
+
+    <br><br>
+
+    <h3>here's how your contributions compare to other users:</h3>
+
+    <div id="plot" align="center"></div>
+
+    <br><br>
+
+    <h3>thanks for making crowd possible</h3>
+
+    <script>
+
+        var magentatopurple = [
+            'rgba(255, 55, 255, 0)',
+            'rgba(255, 55, 235, 0.5)',
+            'rgba(255, 55, 215, 0.75)',
+            'rgba(255, 55, 195, 0.75)',
+            'rgba(255, 55, 180, 0.75)',
+            'rgba(255, 55, 180, 1)',
+            'rgba(255, 55, 170, 1)',
+            'rgba(255, 55, 150, 1)',
+            'rgba(255, 55, 130, 1)'
+        ];
+
+        function initMap() {
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 13,
+            center: {lat: 42.364843, lng: -71.102661},
+            mapTypeId: 'roadmap'
+            });
+
+            heatmap_crosswalks = new google.maps.visualization.HeatmapLayer({
+                    data: getPoints_crosswalks(),
+                    gradient: magentatopurple,
+                    radius: 5,
+                    map: map
+                });
+        }
+
+
+
+        var lat_crosswalks = {{ lat_crosswalks }};
+        var lng_crosswalks = {{ lng_crosswalks }};
+
+        function getPoints_crosswalks() {
+            var limit = lat_crosswalks.length;
+            var points = new Array()
+            for (var i = 0; i < limit; i++)
+            {
+                var latpnt = lat_crosswalks[i];
+                var lngpnt = lng_crosswalks[i];
+                points[i] = new google.maps.LatLng(latpnt,lngpnt)
+             }
+             return points
+        }
+    </script>
+
+    <script type='text/javascript' src='config.js'>
+            
+        var maps_key = config.MAPS_KEY;
+        var firebase_key = config.FIREBASE_KEY;
+
+    </script>
+
+    <script async defer src= "https://maps.googleapis.com/maps/api/js?key=" + maps_key>
+    </script>
+
+    <script>
+        var data = [{
+          values: [{{ sub }}, {{ total }} - {{ sub }}],
+          labels: ['You', 'Them'],
+          type: 'pie',
+          textinfo: 'none',
+          marker: {
+            colors: [
+                '#ffbb99',
+                '#FFF7E6'
+                ]
+          },
+          hoverinfo: 'label+percent',
+        }];
+
+        var layout = {
+          height: 400,
+          width: 500,
+        };
+
+        Plotly.newPlot('plot', data, layout);
+    </script>
+
+
+{% endblock %}
+
+
+
+
+
+

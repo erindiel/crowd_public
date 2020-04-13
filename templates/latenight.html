@@ -1,0 +1,206 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    latenight
+{% endblock %}
+
+{% block main %}
+
+    <style>
+        #map
+        {
+            height: 75%;
+            margin: 0%;
+        }
+        #myDiv
+        {
+            align-content: center;
+        }
+        html, body, main
+        {
+            height: 100%;
+            margin: 2%;
+            /*padding: 0;*/
+            background-color: black;
+        }
+        nav .navbar-brand
+        {
+            background-color: black;
+        }
+
+    </style>
+
+    <h3>stay safe out there. here is where people walk between 8pm - 4am, and where there are streetlights.</h3>
+
+    <div id="map"></div>
+
+    <script src="https://www.gstatic.com/firebasejs/7.5.0/firebase-app.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/7.5.0/firebase-analytics.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/3.1.0/firebase-database.js"></script>
+
+    <script>
+
+        // My web app's Firebase configuration
+        var firebaseConfig = {
+            apiKey: firebase_key,
+            authDomain: "crowd-1575386997687.firebaseapp.com",
+            databaseURL: "https://crowd-1575386997687.firebaseio.com",
+            projectId: "crowd-1575386997687",
+            storageBucket: "crowd-1575386997687.appspot.com",
+            messagingSenderId: "314431603974",
+            appId: "1:314431603974:web:940af3ee09adc2d1d74a87",
+            measurementId: "G-2FRZZW85D5"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        firebase.analytics();
+
+        var latitudes = Array();
+        var longitudes = Array();
+        var keys = Array();
+        var hours = Array();
+
+        // Loop through users in order with the forEach() method. The callback
+        // provided to forEach() will be called synchronously with a DataSnapshot
+        // for each child:
+        var query = firebase.database().ref("location").orderByKey();
+        query.once("value")
+            .then(function(snapshot) {
+                snapshot.forEach(function(childSnapshot) {
+                // key will be the heading of each location reading each loop
+                key = childSnapshot.key;
+                keys.push(key);
+                // childData will be the actual contents of the child
+                childData = childSnapshot.val();
+                latitudes.push(childData.latitude);
+                longitudes.push(childData.longitude);
+
+                var timelong = childData.time;
+                var timestring = new Date(timelong).toTimeString();
+                var hour = parseInt(timestring[0]+timestring[1]);
+                hours.push(hour);
+
+                });
+            });
+
+        function getPoints_latenight() {
+        var points = new Array()
+            for (var i = 0; i < latitudes.length; i++)
+            {
+                var latpnt = latitudes[i];
+                var lngpnt = longitudes[i];
+                var time = hours[i];
+                if (time >= 20 || time < 4) {
+                    points[i] = new google.maps.LatLng(latpnt,lngpnt)
+                    }
+                else {
+                    points[i] = new google.maps.LatLng(0,0)
+                }
+            }
+            return points
+        }
+
+        var lat_lights = {{ lat_lights }};
+        var lng_lights = {{ lng_lights }};
+
+        function getPoints_lights() {
+            var limit = lat_lights.length;
+            var points = new Array()
+            for (var i = 0; i < limit; i++)
+            {
+                var latpnt = lat_lights[i];
+                var lngpnt = lng_lights[i];
+                points[i] = new google.maps.LatLng(latpnt,lngpnt)
+            }
+            return points
+        }
+
+        var map, heatmap_latenight
+
+        var black = [
+            'rgba(0, 0, 0, 0)',
+            'rgba(0, 0, 0, 1)',
+            'rgba(0, 0, 0, 1)',
+            'rgba(0, 0, 0, 1)',
+            'rgba(0, 0, 0, 1)',
+            'rgba(0, 0, 0, 1)',
+            'rgba(0, 0, 0, 1)'
+        ];
+
+        var orangetoyellow = [
+            'rgba(255, 255, 0, 0)',
+            'rgba(255, 205, 25, 1)',
+            'rgba(255, 205, 25, 1)',
+            'rgba(255, 205, 25, 1)',
+            'rgba(255, 185, 25, 1)',
+            'rgba(255, 185, 25, 1)',
+            'rgba(255, 185, 25, 1)',
+            'rgba(255, 165, 25, 1)',
+            'rgba(255, 165, 25, 1)',
+            'rgba(255, 165, 25, 1)',
+            'rgba(255, 145, 25, 1)',
+            'rgba(255, 145, 25, 1)'
+        ];
+
+        function initMap() {
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 13,
+            center: {lat: 42.3743, lng: -71.102661},
+            mapTypeId: 'roadmap'
+            });
+
+            heatmap_lights = new google.maps.visualization.HeatmapLayer({
+                data: getPoints_lights(),
+                gradient: orangetoyellow,
+                radius: 5,
+                opacity: .9,
+                map: map
+            });
+
+            //heatmap that accesses data from firebase must wait til this data has been loaded to proceed
+            function checkIfFinished(){
+                if (latitudes != null) {
+                    return(latitudes.length >= 100);
+                }
+            }
+
+            var timeout = setInterval(function() {
+                if(checkIfFinished()) {
+                    clearInterval(timeout);
+                    isFinished = true;
+                    heatmap_latenight = new google.maps.visualization.HeatmapLayer({
+                        data: getPoints_latenight(),
+                        map: map,
+                        gradient: black,
+                        radius: 5,
+                        opacity: .9,
+                        maxIntensity: 15
+                    });
+                }
+            }, 100);
+        }
+
+
+    </script>
+
+    <script type='text/javascript' src='config.js'>
+            
+        var maps_key = config.MAPS_KEY;
+        var firebase_key = config.FIREBASE_KEY;
+
+    </script>
+
+    <script async defer src= "https://maps.googleapis.com/maps/api/js?key=" + maps_key>
+    </script>
+
+
+{% endblock %}
+
+
+
+
+
+

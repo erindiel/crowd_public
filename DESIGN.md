@@ -1,0 +1,31 @@
+I first used the shell of the finance web app to keep the login and register templates, as well as the users SQL database.
+
+Crowd uses three sources of data, described below, to add a heatmap layer to a Google map. This is done through the Google Maps API in Javascript. The javascript code translates data provided by Flask or Firebase (more below) to an array of LatLng objects (getPoints_X functions), which the HeatmapLayer function accepts as data. I also made three lookup tables for the three datasources, that I hope overlay nicely. This is added as the gradient parameter in HeatmapLayer. I added buttons to toggle individual heatmaps on and off, in case the overlay becomes confusing.
+** Implementing this step was aided by the example provided by the Google Maps Platform, especially in the toggleHeatmap functions. (https://developers-dot-devsite-v2-prod.appspot.com/maps/documentation/javascript/examples/layer-heatmap)
+
+1. Static data - streetlight locations
+I first started with a static data source that could be added to a SQL database. I found locations of streetlights on the Cambridge and Boston city websites (https://www.cambridgema.gov/GIS/gisdatadictionary)(https://data.boston.gov/). In some cases, these needed to be converted from various file formats to lat,lng .csv files. I created the SQL database below, then imported data either through IMPORT statements or the import tab in phpliteadmin.
+
+CREATE TABLE 'lights' ('id' INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 'lat' NUMERIC NOT NULL, 'lng' NUMERIC NOT NULL)
+
+I accessed the SQL data in application.py, then passed the lat and lng arrays to the .html templates.
+
+2. User annotated data - crosswalk locations
+Crosswalks can be visualized in the map satellite view, so users can note their location. This data is ultimately stored in a SQL database just like the static streetlight data, but with the extra information about which user provided each crosswalk’s coordinates.
+
+CREATE TABLE 'crosswalks' ('id' INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 'lat' NUMERIC NOT NULL, 'lng' NUMERIC NOT NULL, 'creatorID' INTEGER NOT NULL, FOREIGN KEY (creatorID) REFERENCES users(id))
+
+The data is also passed to the .html templates as described in #1 for visualization purposes.
+
+To get this data, users annotate the map with markers, then submit this information. To add markers, save their position, and even remove them, I used the addListener function to detect various click events and save the LatLng object from that click event. This information must be passed from javascript to flask to be then added to the SQL database. I created a button (“submit”), that onclick added all marker positions to an array, crosswalks. It also prompted AJAX to JSON.stringify this data then “post” it to the annotate template. In flask, this data could be retrieved using get_json() and added to SQL with an INSERT statement that was iterated across all items in the json data. One design decision I made was how the page then updated post-annotation. Perhaps a user would submit a couple markers at a time, then start over. I thought I could render_template in flask, so the SQL request would be updated and thus the heat map would be updated to reflect the new additions. This didn’t seem to work (only if page was refreshed completely). So instead, I created a new getPoints function that reflected only the new additions, and created a second heatmap layer with a different lookup table for the new points. I then deleted the markers already submitted. The persistence of the new heatmap works through multiple rounds of annotations.
+
+To encourage users to submit annotations, they can track their stats in the my stats tab, where the map only displays the crosswalks they added, and what percentage of the total data their work represents. This pie chart was made using Plotly.
+
+3. Tracking data
+
+This was the hardest data type to implement! I needed a location tracker that added locations to a global database, which could either be passed to javascript for display, or flask/sql. I thought about tracking location from within the browser then passing it to flask using AJAX (like the annotation data) with some regularity, but ultimately it makes more sense to track with a phone app rather than keeping a browser open. I used the code described here (https://www.androidauthority.com/create-a-gps-tracking-application-with-firebase-realtime-databse-844343/) to make an Android tracking app that added data to a firebase database. The minor modifications I made were to make it continually add locations rather than update a single entry, and change the display text. I did not really spend time developing this “app” more than that - it was simply a means to location data. You’ll notice I added a MapsActivity, with the intention that someone can watch themselves on the map as they are being tracked. I have not yet spent time on this user interface, so it is not being used in this current form.
+
+Within my web app, I loaded the firebase data within javascript making use of the data snapshot functions and iterating through all items with forEach, allowing me to make a list of locations and times of their recording. I could then use this data directly in javascript to make another heatmap for pedestrian tracking data. Finally, I selected a subset of this data based on time of day to make the latenight tab, showing where people walk late at night. Because this information is collective (and I think anonymous?) I didn’t block off any areas of the map. I could do this with the data overlay options in the Google Maps API, like the polygon feature. I also might add the poly line feature to the annotation tab, to trace instead of track your walks.
+
+I think because this data was loaded from firebase, it was desynchronized with the rest of the data, so the heat map wouldn’t show up on the map - but if I ran the heat map code in the javascript console, it appeared on the map. So I implemented a timeout that checked periodically for the latitudes array to be completely filled (based on checking for the total number of children in the firebase database during the first loop through and saving this as a global variable).
+

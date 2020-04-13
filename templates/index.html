@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+    <head>
+
+         <!--Required meta tags-->
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
+
+         <!--documentation at http://getbootstrap.com/docs/4.1/, alternative themes at https://bootswatch.com/-->
+        <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" rel="stylesheet">
+
+         <!--https://favicon.io/emoji-favicons/two-women-holding-hands/-->
+        <link href="/static/favicon.ico" rel="icon">
+
+        <link href="/static/styles.css" rel="stylesheet">
+
+        <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js"></script>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js"></script>
+
+        <title>crowd: {% block title %}{% endblock %}</title>
+
+        <style>
+            #map
+            {
+            height: 100%;
+            margin: 0%;
+            }
+            html, body
+            {
+                height: 75%;
+                margin: 2%;
+                /*padding: 0;*/
+            }
+            #floating-panel
+            {
+                position: relative;
+                top: 100%;
+                /*left: 7%;*/
+                z-index: 5;
+                background-color: #fff7e6;
+                padding: 0px;
+                border: 0px solid #999;
+                text-align: center;
+                font-family: 'Roboto','sans-serif';
+                line-height: 30px;
+                padding-left: 1px;
+            }
+        </style>
+
+    </head>
+
+    <body>
+
+        <nav class="navbar navbar-expand-md">
+            <a class="navbar-brand" href="/"><span class="title">crowd.</span></a>
+            <button aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation" class="navbar-toggler" data-target="#navbar" data-toggle="collapse" type="button">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbar">
+                {% if session.user_id %}
+                    <ul class="navbar-nav mr-auto mt-2">
+                        <li class="nav-item"><a class="nav-link" href="/stats">my stats</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/annotate">annotate</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/latenight">latenight</a></li>
+                        <!--<li class="nav-item"><a class="nav-link" href="/history">History</a></li>-->
+                        <!--<li class="nav-item"><a class="nav-link" href="/cash">Add Cash</a></li>-->
+                    </ul>
+                    <ul class="navbar-nav ml-auto mt-2">
+                        <li class="nav-item"><a class="nav-link" href="/logout">log out</a></li>
+                    </ul>
+                {% else %}
+                    <ul class="navbar-nav ml-auto mt-2">
+                        <li class="nav-item"><a class="nav-link" href="/register">register</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/login">log in</a></li>
+                    </ul>
+                {% endif %}
+            </div>
+        </nav>
+
+        <div id="floating-panel">
+            <button class="button2" onclick="toggleHeatmap_track()">Toggle Walking Heatmap</button>
+            <button class="button1" onclick="toggleHeatmap_lights()">Toggle Streetlamp Heatmap</button>
+            <button class="button3" onclick="toggleHeatmap_crosswalks()">Toggle Crosswalk Heatmap</button>
+        </div>
+
+        <div id="map"></div>
+
+        <!-- The core Firebase JS SDK is always required and must be listed first -->
+        <script src="https://www.gstatic.com/firebasejs/7.5.0/firebase-app.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/7.5.0/firebase-analytics.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/3.1.0/firebase-database.js"></script>
+
+        <script>
+
+            // My web app's Firebase configuration
+            var firebaseConfig = {
+                apiKey: firebase_key,
+                authDomain: "crowd-1575386997687.firebaseapp.com",
+                databaseURL: "https://crowd-1575386997687.firebaseio.com",
+                projectId: "crowd-1575386997687",
+                storageBucket: "crowd-1575386997687.appspot.com",
+                messagingSenderId: "314431603974",
+                appId: "1:314431603974:web:940af3ee09adc2d1d74a87",
+                measurementId: "G-2FRZZW85D5"
+            };
+
+            // Initialize Firebase
+            firebase.initializeApp(firebaseConfig);
+            firebase.analytics();
+
+            var latitudes = Array();
+            var longitudes = Array();
+            var keys = Array();
+            var hours = Array();
+
+            // Loop through users in order with the forEach() method. The callback
+            // provided to forEach() will be called synchronously with a DataSnapshot
+            // for each child:
+            var query = firebase.database().ref("location").orderByKey();
+            query.once("value")
+              .then(function(snapshot) {
+                numChild = snapshot.numChildren();
+                snapshot.forEach(function(childSnapshot) {
+                  // key will be the heading of each location reading each loop
+                  key = childSnapshot.key;
+                  keys.push(key);
+                  // childData will be the actual contents of the child
+                  childData = childSnapshot.val();
+                  latitudes.push(childData.latitude);
+                  longitudes.push(childData.longitude);
+                  var timelong = childData.time;
+                  var timestring = new Date(timelong).toTimeString();
+                  var hour = parseInt(timestring[0]+timestring[1]);
+                  hours.push(hour);
+
+              });
+            });
+
+            // get points for tracking heatmap
+            function getPoints_track() {
+                var points = new Array()
+                for (var i = 0; i < latitudes.length; i++)
+                {
+                    var latpnt = latitudes[i];
+                    var lngpnt = longitudes[i];
+                    points[i] = new google.maps.LatLng(latpnt,lngpnt)
+                 }
+                 return points
+            }
+
+            // get points for streelight heatmap
+            var lat_lights = {{ lat_lights }};
+            var lng_lights = {{ lng_lights }};
+
+            function getPoints_lights() {
+                var limit = lat_lights.length;
+                var points = new Array()
+                for (var i = 0; i < limit; i++)
+                {
+                    var latpnt = lat_lights[i];
+                    var lngpnt = lng_lights[i];
+                    points[i] = new google.maps.LatLng(latpnt,lngpnt)
+                 }
+                 return points
+            }
+
+
+            // get points for crosswalk heatmap
+            var lat_crosswalks = {{ lat_crosswalks }};
+            var lng_crosswalks = {{ lng_crosswalks }};
+
+            function getPoints_crosswalks() {
+                var limit = lat_crosswalks.length;
+                var points = new Array()
+                for (var i = 0; i < limit; i++)
+                {
+                    var latpnt = lat_crosswalks[i];
+                    var lngpnt = lng_crosswalks[i];
+                    points[i] = new google.maps.LatLng(latpnt,lngpnt)
+                 }
+                 return points
+            }
+
+            // look up tables for heatmaps
+            var orangetoyellow = [
+                'rgba(255, 255, 0, 0)',
+                'rgba(255, 205, 25, 1)',
+                'rgba(255, 205, 25, 1)',
+                'rgba(255, 205, 25, 1)',
+                'rgba(255, 185, 25, 1)',
+                'rgba(255, 185, 25, 1)',
+                'rgba(255, 185, 25, 1)',
+                'rgba(255, 165, 25, 1)',
+                'rgba(255, 165, 25, 1)',
+                'rgba(255, 165, 25, 1)',
+                'rgba(255, 145, 25, 1)',
+                'rgba(255, 145, 25, 1)'
+            ];
+
+            var greentocyan = [
+                'rgba(0, 255, 132, 0)',
+                'rgba(0, 234, 132, 1)',
+                'rgba(0, 224, 122, 1)',
+                'rgba(0, 224, 122, 1)',
+                'rgba(0, 214, 112, 1)',
+                'rgba(0, 214, 112, 1)',
+                'rgba(0, 214, 112, 1)',
+                'rgba(0, 214, 112, 1)',
+                'rgba(0, 204, 102, 1)',
+                'rgba(0, 204, 102, 1)',
+                'rgba(0, 204, 102, 1)',
+                'rgba(0, 204, 102, 1)',
+                'rgba(0, 204, 102, 1)'
+            ];
+
+            var magentatopurple = [
+                'rgba(255, 55, 255, 0)',
+                'rgba(255, 55, 235, 0.5)',
+                'rgba(255, 55, 215, 0.75)',
+                'rgba(255, 55, 195, 0.75)',
+                'rgba(255, 55, 180, 0.75)',
+                'rgba(255, 55, 180, 1)',
+                'rgba(255, 55, 170, 1)',
+                'rgba(255, 55, 150, 1)',
+                'rgba(255, 55, 130, 1)'
+            ];
+
+
+            // initialize the google maps div and add heatmaps (3)
+            var map, heatmap, heatmap_streetlamps, heatmap_crosswalks, heatmap_track
+            function initMap() {
+                map = new google.maps.Map(document.getElementById('map'), {
+                    zoom: 13,
+                center: {lat: 42.364843, lng: -71.102661},
+                mapTypeId: 'roadmap'
+                });
+
+                heatmap_lights = new google.maps.visualization.HeatmapLayer({
+                    data: getPoints_lights(),
+                    gradient: orangetoyellow,
+                    radius: 5,
+                    opacity: .9,
+                    map: map
+                });
+
+                heatmap_crosswalks = new google.maps.visualization.HeatmapLayer({
+                    data: getPoints_crosswalks(),
+                    gradient: magentatopurple,
+                    radius: 5,
+                    map: map
+                });
+
+                //heatmap that accesses data from firebase must wait til this data has been loaded to proceed
+                function checkIfFinished(){
+                    if (latitudes.length >= 1) {
+                        return(latitudes.length >= numChild);
+                    }
+                }
+
+                var timeout = setInterval(function() {
+                    if(checkIfFinished()) {
+                        clearInterval(timeout);
+                        isFinished = true;
+                        heatmap_track = new google.maps.visualization.HeatmapLayer({
+                            data: getPoints_track(),
+                            map: map,
+                            radius: 5,
+                            opacity: .9,
+                            gradient: greentocyan,
+                            maxIntensity: 15
+                        });
+                    }
+                }, 100);
+
+            }
+
+            // toggle heatmaps on and off
+            function toggleHeatmap_track() {
+                heatmap_track.setMap(heatmap_track.getMap() ? null : map);
+            }
+
+            function toggleHeatmap_lights() {
+                heatmap_lights.setMap(heatmap_lights.getMap() ? null : map);
+            }
+
+            function toggleHeatmap_crosswalks() {
+                heatmap_crosswalks.setMap(heatmap_crosswalks.getMap() ? null : map);
+            }
+        </script>
+
+        <script type='text/javascript' src='config.js'>
+                
+            var maps_key = config.MAPS_KEY;
+            var firebase_key = config.FIREBASE_KEY;
+
+        </script>
+
+        <script async defer src= "https://maps.googleapis.com/maps/api/js?key=" + maps_key>
+        </script>
+
+        <br><br>
+        <footer>
+            Data provided for free by the cities of <a class='link' href="https://www.cambridgema.gov/GIS/gisdatadictionary">Cambridge</a> and <a class='link' href="https://data.boston.gov/">Boston</a> and users like <a class='link' href="/stats">you</a>.
+        </footer>
+
+    </body>
+
+</html>
+
+
+
+
+
